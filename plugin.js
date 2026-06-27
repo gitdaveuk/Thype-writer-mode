@@ -1,7 +1,7 @@
-// Thypewriter / org-mode autoscroll for Thymer
+// Typewriter / org-mode autoscroll for Thymer
 // Hooks into the virtualinput textarea (shadow DOM) for keystrokes,
-// then finds the rendered cursor element in the main DOM and scrolls
-// the .panel-scroller-y container to keep it centred.
+// then finds the rendered cursor element inside the FOCUSED panel
+// and scrolls its .panel-scroller-y to keep it centred.
 
 class Plugin extends AppPlugin {
     onLoad() {
@@ -9,9 +9,9 @@ class Plugin extends AppPlugin {
         const DEBOUNCE_MS     = 50;    // ms to wait after last keystroke
         const SMOOTH_MS       = 100;   // scroll animation duration (0 = instant)
 
-        let enabled      = true;
+        let enabled       = true;
         let debounceTimer = null;
-        let textarea      = null;       // the virtualinput <textarea>
+        let textarea      = null;
         let boundHandler  = null;
         let animating     = new WeakSet();
 
@@ -29,8 +29,8 @@ class Plugin extends AppPlugin {
 
             if (Math.abs(delta) < 3) return;
 
-            const startTop  = scroller.scrollTop;
-            const endTop    = startTop + delta;
+            const startTop = scroller.scrollTop;
+            const endTop   = startTop + delta;
 
             if (SMOOTH_MS <= 0) { scroller.scrollTop = endTop; return; }
 
@@ -45,39 +45,51 @@ class Plugin extends AppPlugin {
             })(t0);
         }
 
-        // ── Find the cursor element and its scroller ─────────────────────
-        // Thymer renders a blinking cursor as a positioned element.
-        // Common candidates: .cursor, .caret, [class*="cursor"], [class*="caret"]
+        // ── Find cursor + scroller, scoped to the focused panel ──────────
+        const CURSOR_SELECTORS = [
+            '.cursor',
+            '.caret',
+            '.editor-cursor',
+            '.text-cursor',
+            '[class*="cursor"]:not(.mouse-cursor)',
+            '[class*="caret"]',
+        ];
+
         function findCursorAndScroller() {
-            // Try known cursor selectors (broaden if needed)
-            const CURSOR_SELECTORS = [
-                '.cursor',
-                '.caret',
-                '.editor-cursor',
-                '.text-cursor',
-                '[class*="cursor"]:not(.mouse-cursor)',
-                '[class*="caret"]',
+            // The focused panel always has .has-focus; prefer that scope.
+            // Fall back to searching the whole document if nothing found there.
+            const roots = [
+                document.querySelector('.panel.has-focus'),
+                document,
             ];
 
-            for (const sel of CURSOR_SELECTORS) {
-                const el = document.querySelector(sel);
-                if (el && el.getBoundingClientRect().height > 0) {
-                    // Find its .panel-scroller-y ancestor
-                    let p = el.parentElement;
-                    while (p) {
-                        if (p.classList.contains('panel-scroller-y')) {
-                            return { cursor: el, scroller: p };
+            for (const root of roots) {
+                if (!root) continue;
+                for (const sel of CURSOR_SELECTORS) {
+                    // querySelectorAll so we can check each for visibility
+                    const candidates = root.querySelectorAll(sel);
+                    for (const el of candidates) {
+                        const r = el.getBoundingClientRect();
+                        if (r.height === 0) continue; // not visible
+
+                        // Walk up to find .panel-scroller-y
+                        let p = el.parentElement;
+                        while (p) {
+                            if (p.classList.contains('panel-scroller-y')) {
+                                return { cursor: el, scroller: p };
+                            }
+                            p = p.parentElement;
                         }
-                        p = p.parentElement;
-                    }
-                    // Fallback: first scrollable ancestor
-                    p = el.parentElement;
-                    while (p) {
-                        if (p.scrollHeight > p.clientHeight &&
-                            getComputedStyle(p).overflowY !== 'visible') {
-                            return { cursor: el, scroller: p };
+
+                        // Fallback: first scrollable ancestor
+                        p = el.parentElement;
+                        while (p) {
+                            if (p.scrollHeight > p.clientHeight &&
+                                getComputedStyle(p).overflowY !== 'visible') {
+                                return { cursor: el, scroller: p };
+                            }
+                            p = p.parentElement;
                         }
-                        p = p.parentElement;
                     }
                 }
             }
@@ -103,7 +115,6 @@ class Plugin extends AppPlugin {
             const ta = sr.getElementById('virtualinput');
             if (!ta || ta === textarea) return !!textarea;
 
-            // Detach from old one if any
             if (textarea && boundHandler) {
                 textarea.removeEventListener('keydown', boundHandler, true);
                 textarea.removeEventListener('input',   boundHandler, true);
@@ -116,7 +127,6 @@ class Plugin extends AppPlugin {
             return true;
         }
 
-        // Try immediately, then poll until found
         if (!attachToTextarea()) {
             const poll = setInterval(() => {
                 if (attachToTextarea()) clearInterval(poll);
@@ -140,7 +150,6 @@ class Plugin extends AppPlugin {
             },
         });
 
-        // ── Command palette ──────────────────────────────────────────────
         this.ui.addCommandPaletteCommand({
             label:      'Toggle typewriter autoscroll',
             icon:       'ti-align-center',
@@ -149,7 +158,6 @@ class Plugin extends AppPlugin {
     }
 
     onUnload() {
-        clearTimeout(this._debounceTimer);
         clearInterval(this._pollInterval);
     }
 }
