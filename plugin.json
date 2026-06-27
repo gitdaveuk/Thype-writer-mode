@@ -1,0 +1,22 @@
+{
+	"ver": 1,
+	"name": "Thypewriter Scroll",
+	"icon": "align-center",
+	"off": false,
+	"item_name": "",
+	"description": "Keeps the active editor line centred on screen — Emacs / org-mode typewriter mode.",
+	"show_sidebar_items": false,
+	"show_cmdpal_items": true,
+	"views": [],
+	"fields": [],
+	"page_field_ids": [],
+	"sidebar_record_sort_field_id": "",
+	"sidebar_record_sort_dir": "asc",
+	"managed": {
+		"fields": false,
+		"views": false,
+		"sidebar": false
+	},
+	"custom": {},
+	"home": false
+}
